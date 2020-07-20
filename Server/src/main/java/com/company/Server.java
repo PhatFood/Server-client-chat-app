@@ -1,7 +1,4 @@
-import javax.xml.crypto.Data;
-import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
+package com.company;
 
 public class Server {
     public static void main(String [] args)

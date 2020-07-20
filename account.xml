@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><accounts>
+	<record>
+		<name>phat</name>
+		<pass>1</pass>
+	</record>
+<record><name>guest</name><pass>1</pass></record><record><name>phuc</name><pass>1</pass></record></accounts>
