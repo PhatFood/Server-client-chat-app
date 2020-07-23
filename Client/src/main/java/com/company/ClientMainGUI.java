@@ -11,12 +11,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
-public class ClientMainGUI extends JPanel implements ClientListener {
+public class ClientMainGUI extends JPanel implements ClientListener, WindowListener {
 
     private final ClientHandle client;
     private JList<String> jListClientOnline;
     private DefaultListModel<String> clientListModel;
     private HashMap<String, ArrayList<String>> waitingMsg = new HashMap<>();
+    private HashMap<String, String> waitingFile = new HashMap<>();
     private HashSet<String> openingInbox = new HashSet<>();
 
     public ClientMainGUI(ClientHandle client){
@@ -27,6 +28,7 @@ public class ClientMainGUI extends JPanel implements ClientListener {
         setLayout(new BorderLayout());
         add(new JScrollPane(jListClientOnline),BorderLayout.CENTER);
 
+
         jListClientOnline.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -35,9 +37,10 @@ public class ClientMainGUI extends JPanel implements ClientListener {
                     if(!openingInbox.contains(userName)) {
                         openingInbox.add(userName);
                         ClientInbox clientInbox;
-                        clientInbox = new ClientInbox(client,userName,waitingMsg.get(userName));
+                        clientInbox = new ClientInbox(client,userName,waitingMsg.get(userName),waitingFile.get(userName));
 
                         waitingMsg.get(userName).clear();
+                        waitingFile.put(userName,"");
 
                         JFrame jFrame = new JFrame(userName);
                         jFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -48,7 +51,6 @@ public class ClientMainGUI extends JPanel implements ClientListener {
                         jFrame.addWindowListener(new WindowListener() {
                             @Override
                             public void windowOpened(WindowEvent e) {
-
                             }
 
                             @Override
@@ -58,40 +60,35 @@ public class ClientMainGUI extends JPanel implements ClientListener {
 
                             @Override
                             public void windowClosed(WindowEvent e) {
-
                             }
 
                             @Override
                             public void windowIconified(WindowEvent e) {
-
                             }
 
                             @Override
                             public void windowDeiconified(WindowEvent e) {
-
                             }
 
                             @Override
                             public void windowActivated(WindowEvent e) {
-
                             }
 
                             @Override
                             public void windowDeactivated(WindowEvent e) {
-
                             }
                         });
                     }
                 }
             }
         });
+
     }
 
     public static void main(String[] args){
         try {
             ClientHandle client = new ClientHandle("localhost",8888);
 
-            client.connect();
             client.login("guest","1");
 
             ClientMainGUI clientMainGUI = new ClientMainGUI(client);
@@ -108,37 +105,77 @@ public class ClientMainGUI extends JPanel implements ClientListener {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-
     }
 
     @Override
     public void online(String userName) {
         clientListModel.addElement(userName);
         waitingMsg.put(userName,new ArrayList<String>());
+        waitingFile.put(userName,"");
     }
 
     @Override
     public void offline(String userName) {
         clientListModel.removeElement(userName);
         waitingMsg.remove(userName);
+        waitingFile.remove(userName);
     }
 
     @Override
     public void onMessage(String userName, String msg) {
         if(waitingMsg.containsKey(userName)) {
             waitingMsg.get(userName).add(userName + ": " + msg);
-            /*int numberMeswait = waitingMsg.get(userName).size();
-            if(numberMeswait>0)
-            {
-                for(int i = 0; i < clientListModel.getSize(); i++)
-                {
-                    if (clientListModel.getElementAt(i).equals(userName))
-                    {
-                        clientListModel.getElementAt(i).
-                    }
-                }
-            }*/
         }
+    }
+
+    @Override
+    public void onReceivingFile(String userName, String fileName) {
+        if(waitingMsg.containsKey(userName))
+        {
+            String message = userName + "sending a file:";
+            waitingMsg.get(userName).add(message);
+            String message1 = fileName;
+            waitingMsg.get(userName).add(message1);
+            waitingFile.put(userName,fileName);
+        }
+    }
+
+    @Override
+    public void onReadyToSendFile(String userName, String fileName) {
+
+    }
+
+    @Override
+    public void windowOpened(WindowEvent e) {
+    }
+
+    @Override
+    public void windowClosing(WindowEvent e) {
+        System.out.println("2");
+        client.quit();
+    }
+
+    @Override
+    public void windowClosed(WindowEvent e) {
+    }
+
+    @Override
+    public void windowIconified(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowDeiconified(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowActivated(WindowEvent e) {
+
+    }
+
+    @Override
+    public void windowDeactivated(WindowEvent e) {
+
     }
 }

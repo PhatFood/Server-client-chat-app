@@ -8,16 +8,25 @@ import java.util.ArrayList;
 
 public class ServerHandle extends Thread {
 
-    private Socket clientSocket;
+    private final Socket socket;
     private Account account;
-    private boolean isJoined;
-    private BufferedWriter bw;
+    private boolean isUserJoined;
+    private boolean isFileTransferSocket;
+    private String receiverName;
+    private String senderName;
+    private final int BUFFER_SIZE = 8192;
 
-    public ServerHandle(Socket clientSocket) {
-        this.clientSocket = clientSocket;
-        bw = null;
-        isJoined = false;
+    DataOutputStream dataOutputStream;
+    DataInputStream dataInputStream;
+
+    public ServerHandle(Socket socket) throws IOException {
+        this.socket = socket;
+        dataInputStream = new DataInputStream(socket.getInputStream());
+        dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        isUserJoined = false;
+        isFileTransferSocket = false;
         account = null;
+        receiverName = null;
     }
 
     @Override
@@ -25,45 +34,65 @@ public class ServerHandle extends Thread {
         try {
             handleClient();
         } catch (IOException e) {
-            ServerManager.removeServerHandle(this);
+            /*ServerManager.removeClientHandle(this);
             notifyOffline();
+            e.printStackTrace();*/
             e.printStackTrace();
+
+            if (isFileTransferSocket) {
+                ServerManager.removeFileTransferHandle(this);
+            } else {
+                notifyOffline();
+                ServerManager.removeClientHandle(this);
+                isUserJoined = false;
+               /* try {
+                    socket.close();
+                } catch (IOException ioException) {
+                    e.printStackTrace();
+                }*/
+            }
         }
     }
 
     public void sendMsg(String msg) throws IOException {
-        if (bw == null) {
-            return;
-        }
-        if (isJoined) {
-            bw.write(msg);
-            bw.newLine();
-            bw.flush();
+        if (isUserJoined) {
+            dataOutputStream.writeUTF(msg);
         }
     }
 
     public void handleClient() throws IOException {
-        OutputStream outputStream = clientSocket.getOutputStream();
-        bw = new BufferedWriter(new OutputStreamWriter(outputStream));
-        InputStream inputStream = clientSocket.getInputStream();
-        BufferedReader br = new BufferedReader(new InputStreamReader(inputStream));
-
         String receivedMessage;
 
         try {
             do {
-                receivedMessage = br.readLine();
+                receivedMessage = dataInputStream.readUTF();
                 System.out.println("Received : " + receivedMessage);
 
                 String[] tokens = StringUtils.split(receivedMessage);
                 if (tokens != null && tokens.length > 0) {
                     if (tokens[0].equals("login")) {
-                        isJoined = handleLogin(tokens);
-                        if (isJoined) {
+                        isUserJoined = handleLogin(tokens);
+                        if (isUserJoined) {
                             handleOnlineEvent();
                         } else handleLoginFailedEvent();
-                    } else if (tokens[0].equals("message")) {
+                    } else if(tokens[0].equals("signup")){
+                        handleSignup(tokens);
+                    }
+                    else if (tokens[0].equals("message")) {
                         handleMessageSingle(receivedMessage);
+                    } else if (tokens[0].equals("requestSendFile")) {
+                        System.out.println(ServerManager.getFileTransferHandles().size());
+                        handleRequestTransferFile(tokens);
+                    } else if (tokens[0].equals("readyReceive")) {
+                        System.out.println(ServerManager.getFileTransferHandles().size());
+                        handleReadyReceiverFile(tokens);
+                        break;
+                    } else if (tokens[0].equals("send_File")){
+                        System.out.println(ServerManager.getFileTransferHandles().size());
+                        readingFileAndSentToClient(tokens);
+                        break;
+                    } else if (tokens[0].equals("fQuit")) {
+                        break;
                     } else if (tokens[0].equals("logout")) {
                         handleOfflineEvent();
                         break;
@@ -75,12 +104,85 @@ public class ServerHandle extends Thread {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            notifyOffline();
-            ServerManager.removeServerHandle(this);
-            clientSocket.close();
-            isJoined = false;
-            bw.close();
-            br.close();
+            if (isFileTransferSocket) {
+                //ServerManager.removeFileTransferHandle(this);
+            } else {
+                notifyOffline();
+                ServerManager.removeClientHandle(this);
+                isUserJoined = false;
+                //socket.close();
+            }
+        }
+    }
+
+    private void readingFileAndSentToClient(String[] tokens) throws IOException {
+        isFileTransferSocket = true;
+        String file_name = tokens[1];
+        String filesize = tokens[2];
+
+        String receiver = tokens[4];
+        String sender = tokens[3];
+
+        Socket receiverSocket = ServerManager.getSocketReceiver(sender,receiver);
+
+        if (receiverSocket != null) {
+            try {
+                System.out.println("Sending.......");
+                String cmd = "sendingFile " + file_name + " " + filesize + " " + sender;
+                System.out.println(cmd);
+                DataOutputStream dataOutputStreamR = new DataOutputStream(receiverSocket.getOutputStream());
+                dataOutputStreamR.writeUTF(cmd);
+
+                InputStream input = socket.getInputStream();
+                OutputStream sendFile = receiverSocket.getOutputStream();
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int cnt;
+                int test = 0;
+                while ((cnt = input.read(buffer)) > 0) {
+                    test++;
+                    sendFile.write(buffer, 0, cnt);
+                }
+                System.out.println("test " + test);
+                sendFile.flush();
+                sendFile.close();
+                //this.socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void handleReadyReceiverFile(String[] tokens) {
+        isFileTransferSocket = true;
+        receiverName = tokens[1];
+        senderName = tokens[2];
+        ServerManager.addFileTransferHandle(this);
+
+        String senderName = tokens[1];
+        String receiverName = tokens[2];
+        ArrayList<ServerHandle> serverHandles = ServerManager.getClientHandles();
+        for (ServerHandle serverHandle : serverHandles) {
+            if (serverHandle.getUserName() != null && serverHandle.getUserName().equals(receiverName)) {
+                try {
+                    serverHandle.sendMsg("acceptedSendFile " + receiverName + " " + senderName);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void handleRequestTransferFile(String[] tokens) {
+        String receiverName = tokens[1];
+        ArrayList<ServerHandle> serverHandles = ServerManager.getClientHandles();
+        for (ServerHandle serverHandle : serverHandles) {
+            if (serverHandle.getUserName() != null && serverHandle.getUserName().equals(receiverName)) {
+                try {
+                    serverHandle.sendMsg("sendingFileRequest " + this.account.name + " " + tokens[2]);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
@@ -138,23 +240,18 @@ public class ServerHandle extends Thread {
         notifyOffline();
         sendMsg("disconnected");
         sendClientCurrentOffline();
-        ServerManager.removeServerHandle(this);
+        ServerManager.removeClientHandle(this);
     }
 
     private void handleLoginFailedEvent() throws IOException {
-        if (bw == null) {
-            return;
-        }
-        bw.write("loginFailed");
-        bw.newLine();
-        bw.flush();
+        dataOutputStream.writeUTF("loginFailed");
     }
 
     private void handleOnlineEvent() throws IOException {
         sendMsg("logsuccess");
         notifyOnline();
         sendClientCurrentOnline();
-        ServerManager.addServerHandle(this);
+        ServerManager.addClientHandle(this);
     }
 
     private void notifyOffline() {
@@ -183,6 +280,21 @@ public class ServerHandle extends Thread {
         }
     }
 
+
+    private void handleSignup(String[] tokens) throws IOException {
+        if(tokens.length == 3){
+            Account tempA = new Account(tokens[1], tokens[2]);
+            if (ServerManager.addAccount(tempA)) {
+                    dataOutputStream.writeUTF("signupsuccess");
+                    return;
+            }
+            else {
+                dataOutputStream.writeUTF("signupsuccess");
+            }
+            return;
+        }
+    }
+
     private boolean handleLogin(String[] tokens) {
         if (tokens.length == 3) {
             Account tempA = new Account(tokens[1], tokens[2]);
@@ -192,5 +304,18 @@ public class ServerHandle extends Thread {
             }
         }
         return false;
+    }
+
+    public String getSendingName() {
+        return senderName;
+    }
+
+    public String getReceivingName() {
+        return receiverName;
+    }
+
+    public Socket getSocket() throws IOException {
+        ServerManager.removeFileTransferHandle(this);
+        return socket;
     }
 }

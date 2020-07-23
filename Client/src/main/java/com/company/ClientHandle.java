@@ -2,17 +2,19 @@ package com.company;
 
 import org.apache.commons.lang3.StringUtils;
 
+import javax.swing.*;
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
 
 public class ClientHandle {
-    private final Socket socket;
-    private boolean isConnected;
+    private Socket socket;
+
+    private String currentUser;
     private ArrayList<ClientListener> clientListeners = new ArrayList<>();
 
-    private BufferedWriter bw;
-    private BufferedReader br;
+    private DataInputStream dataInputStream;
+    private DataOutputStream dataOutputStream;
 
     public ArrayList<ClientListener> getLis(){
         return clientListeners;
@@ -21,8 +23,9 @@ public class ClientHandle {
     ClientHandle(String host, int port) throws IOException {
         final Socket socket = new Socket(host, port);
         this.socket = socket;
-        bw = null;
-        br = null;
+        currentUser = null;
+        dataInputStream = new DataInputStream(socket.getInputStream());
+        dataOutputStream = new DataOutputStream(socket.getOutputStream());
         addClientListener(new ClientListener() {
             @Override
             public void online(String userName) {
@@ -38,45 +41,60 @@ public class ClientHandle {
             public void onMessage(String userName, String msg) {
                 System.out.println("receive " + userName + " " + msg);
             }
+
+            @Override
+            public void onReceivingFile(String userName, String fileName) {
+                System.out.println("receive file "+ userName + " " + fileName);
+            }
+
+            @Override
+            public void onReadyToSendFile(String userName, String fileName) {
+                System.out.println("ready to send file");
+            }
         });
-        isConnected = false;
     }
 
-    public boolean sendMessage(String userName, String msg) {
-        if (bw == null)
-            return false;
-        try {
+    public boolean sendFileRequest(String receiverName, String fileName) {
+
             String sentMessage = "";
-            sentMessage = "message " + userName + " " + msg;
-            bw.write(sentMessage);
-            bw.newLine();
-            bw.flush();
-            return true;
+            sentMessage = "requestSendFile " + receiverName+" "+fileName;
+        try {
+            dataOutputStream.writeUTF(sentMessage);
         } catch (IOException e) {
             e.printStackTrace();
             return false;
         }
+        return true;
+    }
+
+    public boolean sendMessage(String userName, String msg) {
+            String sentMessage = "";
+            sentMessage = "message " + userName + " " + msg;
+        try {
+            dataOutputStream.writeUTF(sentMessage);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
     }
 
     public boolean login(String userName, String passWord) {
-        if (bw == null)
-            return false;
+
+        String sentMessage = sentMessage = "login " + userName + " " + passWord;
         try {
-            String sentMessage = "";
-            sentMessage = "login " + userName + " " + passWord;
-            bw.write(sentMessage);
-            bw.newLine();
-            bw.flush();
-        } catch (IOException e) {
-            e.printStackTrace();
+            dataOutputStream.writeUTF(sentMessage);
+        } catch (IOException ioException) {
+            ioException.printStackTrace();
             return false;
         }
         try {
             String receivedMessage;
-            receivedMessage = br.readLine();
+            receivedMessage = dataInputStream.readUTF();
             String[] tokens = StringUtils.split(receivedMessage);
             if (tokens != null && tokens.length > 0) {
                 if (tokens[0].equals("logsuccess")) {
+                    currentUser = userName;
                     return true;
                 }
                 else if(tokens[0].equals("loginFailed"))
@@ -84,78 +102,24 @@ public class ClientHandle {
             }
             else return false;
         } catch (IOException e) {
-            System.out.println("aaa");
             e.printStackTrace();
             return false;
         }
         return false;
     }
 
-    public boolean connect()  {
-        try {
-            OutputStream os = socket.getOutputStream();
-            bw = new BufferedWriter(new OutputStreamWriter(os));
-            InputStream is = socket.getInputStream();
-            br = new BufferedReader(new InputStreamReader(is));
-            return true;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    public boolean sendFile(String file, String userName)
-    {
-        if (bw == null)
-            return false;
-        try {
-            String sentMessage = "";
-            sentMessage = "file "+userName;
-            bw.write(sentMessage);
-            bw.newLine();
-            bw.flush();
-            return true;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return false;
-        }
-
+    public String getCurrentUser(){
+        return currentUser;
     }
 
     public void handleSocket() throws IOException {
-
-        /*Thread t1, t2, t3;
-        t1 = new Thread(() -> sendRequestToServer());
-        //t1.start();*/
-
         Thread t1;
 
         t1 = new Thread(() -> receiveRequestFromServer());
         t1.start();
-
-        /*t3 = new Thread(){
-            @Override
-            public void run() {
-                try {
-                    while (true) {
-                        if (!t1.isAlive() && !t2.isAlive()) {
-                            br.close();
-                            bw.close();
-                            socket.close();
-                            break;
-                        }
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            };
-        t3.start();*/
-
-
     }
 
-    private void sendRequestToServer() {
+    /*private void sendRequestToServer() {
         try {
             String sentMessage = "";
             do {
@@ -175,13 +139,13 @@ public class ClientHandle {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
+    }*/
 
     private void receiveRequestFromServer() {
         try {
             String receivedMessage = null;
             do {
-                receivedMessage = br.readLine();
+                receivedMessage = dataInputStream.readUTF();
                 String[] tokens = StringUtils.split(receivedMessage);
                 if (tokens != null && tokens.length > 0) {
                     if (tokens[0].equals("disconnected")) {
@@ -193,6 +157,10 @@ public class ClientHandle {
                         handleClientOnline(tokens[1]);
                     } else if (tokens[0].equals("isoffline")) {
                         handleClientOffline(tokens[1]);
+                    } else if (tokens[0].equals("sendingFileRequest")){
+                        handleIncomingFileRequest(tokens[1], tokens[2]);
+                    } else if (tokens[0].equals("acceptedSendFile")){
+                        handleReadyToSendFile(tokens[1],tokens[2]);
                     }
                 } else {
                     break;
@@ -200,6 +168,26 @@ public class ClientHandle {
             } while (true);
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void handleReadyToSendFile(String receiveName, String senderName) {
+        for(ClientListener clientListener : clientListeners){
+            try{
+                clientListener.onReadyToSendFile(receiveName,senderName);
+            } finally {
+
+            }
+        }
+    }
+
+    private void handleIncomingFileRequest(String senderName, String fileName) {
+        for(ClientListener clientListener : clientListeners){
+            try{
+                clientListener.onReceivingFile(senderName,fileName);
+            } finally {
+
+            }
         }
     }
 
@@ -231,5 +219,44 @@ public class ClientHandle {
 
     public void removeClientListener(ClientListener listener) {
         clientListeners.remove(listener);
+    }
+
+
+    public void quit() {
+        try {
+            dataOutputStream.writeUTF("logout");
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean signup(String userName, String passWord) {
+        String sentMessage = "signup " + userName + " " + passWord;
+        try {
+            dataOutputStream.writeUTF(sentMessage);
+        } catch (IOException ioException) {
+            ioException.printStackTrace();
+            return false;
+        }
+        try {
+            String receivedMessage;
+            receivedMessage = dataInputStream.readUTF();
+            System.out.println(receivedMessage);
+            String[] tokens = StringUtils.split(receivedMessage);
+            if (tokens != null && tokens.length > 0) {
+                if (tokens[0].equals("signupsuccess")) {
+                    currentUser = userName;
+                    return true;
+                }
+                else if(tokens[0].equals("signupfailed"))
+                    return false;
+            }
+            else return false;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return false;
     }
 }

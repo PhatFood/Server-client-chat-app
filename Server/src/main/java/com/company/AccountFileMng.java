@@ -14,8 +14,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 public class AccountFileMng {
+    private static final String FILE_ACC = "account.xml";
 
-    public static void LoadAccounts(ArrayList<Account> accounts,String FILE_ACC) {
+    public static void LoadAccounts(ArrayList<Account> accounts) {
         try {
             File file;
             file = new File(FILE_ACC);
@@ -42,8 +43,7 @@ public class AccountFileMng {
         }
     }
 
-    public static void AddAccount(Account account, ArrayList<Account> accounts, String FILE_ACC) {
-        accounts.add(account);
+    public static boolean AddAccount(Account account) {
         try {
             File file;
             file = new File(FILE_ACC);
@@ -70,9 +70,12 @@ public class AccountFileMng {
             Transformer trans = TransformerFactory.newInstance().
                     newTransformer();
             trans.transform(source, result);
+
+            return true;
         } catch (ParserConfigurationException | IOException | SAXException | TransformerException e) {
             e.printStackTrace();
-            accounts.remove(account);
+            return false;
         }
     }
+
 }
