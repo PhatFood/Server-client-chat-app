@@ -5,6 +5,7 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 public class ServerHandle extends Thread {
 
@@ -15,6 +16,7 @@ public class ServerHandle extends Thread {
     private String receiverName;
     private String senderName;
     private final int BUFFER_SIZE = 8192;
+    private HashSet<String> topicJoined = new HashSet<>();
 
     DataOutputStream dataOutputStream;
     DataInputStream dataInputStream;
@@ -42,7 +44,6 @@ public class ServerHandle extends Thread {
             if (isFileTransferSocket) {
                 ServerManager.removeFileTransferHandle(this);
             } else {
-                notifyOffline();
                 ServerManager.removeClientHandle(this);
                 isUserJoined = false;
                /* try {
@@ -75,11 +76,14 @@ public class ServerHandle extends Thread {
                         if (isUserJoined) {
                             handleOnlineEvent();
                         } else handleLoginFailedEvent();
-                    } else if(tokens[0].equals("signup")){
+                    } else if (tokens[0].equals("signup")) {
                         handleSignup(tokens);
-                    }
-                    else if (tokens[0].equals("message")) {
-                        handleMessageSingle(receivedMessage);
+                    } else if (tokens[0].equals("message")) {
+                        handleMessage(receivedMessage);
+                    } else if (tokens[0].equals("joinT")) {
+                        handleJoinTopic(tokens);
+                    } else if (tokens[0].equals("createT")) {
+                        handleCreateTopic(tokens);
                     } else if (tokens[0].equals("requestSendFile")) {
                         System.out.println(ServerManager.getFileTransferHandles().size());
                         handleRequestTransferFile(tokens);
@@ -87,7 +91,7 @@ public class ServerHandle extends Thread {
                         System.out.println(ServerManager.getFileTransferHandles().size());
                         handleReadyReceiverFile(tokens);
                         break;
-                    } else if (tokens[0].equals("send_File")){
+                    } else if (tokens[0].equals("send_File")) {
                         System.out.println(ServerManager.getFileTransferHandles().size());
                         readingFileAndSentToClient(tokens);
                         break;
@@ -107,11 +111,28 @@ public class ServerHandle extends Thread {
             if (isFileTransferSocket) {
                 //ServerManager.removeFileTransferHandle(this);
             } else {
-                notifyOffline();
+                //notifyOffline();
                 ServerManager.removeClientHandle(this);
                 isUserJoined = false;
                 //socket.close();
             }
+        }
+    }
+
+    private void handleCreateTopic(String[] tokens) {
+        String topicName = tokens[1];
+        if (tokens.length > 1) {
+            ServerMainGUI.addStateMsg(this.account.name + " created a topic: " + topicName,1);
+            ServerManager.addTopics(topicName);
+            notifyNewTopic(topicName);
+        }
+    }
+
+    private void handleJoinTopic(String[] tokens) {
+        if (tokens.length > 1) {
+            String topic = tokens[1];
+            topicJoined.add(topic);
+            ServerMainGUI.addStateMsg(this.account.name + " joined a topic: " + topic,1);
         }
     }
 
@@ -123,13 +144,11 @@ public class ServerHandle extends Thread {
         String receiver = tokens[4];
         String sender = tokens[3];
 
-        Socket receiverSocket = ServerManager.getSocketReceiver(sender,receiver);
+        Socket receiverSocket = ServerManager.getSocketReceiver(sender, receiver);
 
         if (receiverSocket != null) {
             try {
-                System.out.println("Sending.......");
                 String cmd = "sendingFile " + file_name + " " + filesize + " " + sender;
-                System.out.println(cmd);
                 DataOutputStream dataOutputStreamR = new DataOutputStream(receiverSocket.getOutputStream());
                 dataOutputStreamR.writeUTF(cmd);
 
@@ -142,9 +161,9 @@ public class ServerHandle extends Thread {
                     test++;
                     sendFile.write(buffer, 0, cnt);
                 }
-                System.out.println("test " + test);
                 sendFile.flush();
                 sendFile.close();
+                ServerMainGUI.addStateMsg(this.account.name + " successful send a file to " + receiver + " : " + file_name,2);
                 //this.socket.close();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -165,6 +184,7 @@ public class ServerHandle extends Thread {
             if (serverHandle.getUserName() != null && serverHandle.getUserName().equals(receiverName)) {
                 try {
                     serverHandle.sendMsg("acceptedSendFile " + receiverName + " " + senderName);
+                    ServerMainGUI.addStateMsg(this.account.name + " ready to receive a file from " + senderName,2);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -179,6 +199,7 @@ public class ServerHandle extends Thread {
             if (serverHandle.getUserName() != null && serverHandle.getUserName().equals(receiverName)) {
                 try {
                     serverHandle.sendMsg("sendingFileRequest " + this.account.name + " " + tokens[2]);
+                    ServerMainGUI.addStateMsg(this.account.name + " request to send a file to " + receiverName,2);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -186,18 +207,41 @@ public class ServerHandle extends Thread {
         }
     }
 
-    private void handleMessageSingle(String receivedMessage) {
+    public boolean isJoinedTopic(String topic)
+    {
+        return (topicJoined.contains(topic));
+    }
+
+    private void handleMessage(String receivedMessage) {
         String tokens[] = StringUtils.split(receivedMessage, null, 3);
         String name = tokens[1];
         String message = tokens[2];
 
-        ArrayList<ServerHandle> serverHandles = ServerManager.getClientHandles();
-        for (ServerHandle serverHandle : serverHandles) {
-            if (serverHandle.getUserName() != null && serverHandle.getUserName().equals(name)) {
-                try {
-                    serverHandle.sendMsg("message " + this.account.name + " " + message);
-                } catch (IOException e) {
-                    e.printStackTrace();
+        if(name.charAt(0) == '*')
+        {
+            ServerMainGUI.addStateMsg(this.account.name + " send msg to topic " + name + ": " + message,2);
+            String topicName = tokens[1];
+            ArrayList<ServerHandle> serverHandles = ServerManager.getClientHandles();
+            for (ServerHandle serverHandle : serverHandles) {
+                if (serverHandle.getUserName() != null && serverHandle.isJoinedTopic(topicName) && !serverHandle.getUserName().equals(this.account.name)) {
+                    try {
+                        serverHandle.sendMsg("message " + topicName + "/" + this.account.name + " " + message);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+        else {
+            ServerMainGUI.addStateMsg(this.account.name + " send msg to user " + name + ": " + message,2);
+            ArrayList<ServerHandle> serverHandles = ServerManager.getClientHandles();
+            for (ServerHandle serverHandle : serverHandles) {
+                if (serverHandle.getUserName() != null && serverHandle.getUserName().equals(name)) {
+                    try {
+                        serverHandle.sendMsg("message " + this.account.name + " " + message);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
@@ -235,7 +279,9 @@ public class ServerHandle extends Thread {
         }
     }
 
+
     private void handleOfflineEvent() throws IOException {
+        ServerMainGUI.addStateMsg(this.account.name + " has logged out",1);
         System.out.println("Client has left");
         notifyOffline();
         sendMsg("disconnected");
@@ -251,6 +297,7 @@ public class ServerHandle extends Thread {
         sendMsg("logsuccess");
         notifyOnline();
         sendClientCurrentOnline();
+        notifyCurrentTopicsStatus();
         ServerManager.addClientHandle(this);
     }
 
@@ -267,6 +314,30 @@ public class ServerHandle extends Thread {
         }
     }
 
+    public void notifyNewTopic(String topicName) {
+        ArrayList<ServerHandle> serverHandles = ServerManager.getClientHandles();
+        for (ServerHandle serverHandle : serverHandles) {
+                try {
+                    serverHandle.sendMsg("isonline " + topicName);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+        }
+    }
+
+    private void notifyCurrentTopicsStatus(){
+        HashSet<String> topics = ServerManager.getTopics();
+        for(String topicName : topics)
+        {
+            try {
+                sendMsg("isonline " + topicName);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
     public void notifyOnline() {
         ArrayList<ServerHandle> serverHandles = ServerManager.getClientHandles();
         for (ServerHandle serverHandle : serverHandles) {
@@ -282,14 +353,14 @@ public class ServerHandle extends Thread {
 
 
     private void handleSignup(String[] tokens) throws IOException {
-        if(tokens.length == 3){
+        if (tokens.length == 3) {
             Account tempA = new Account(tokens[1], tokens[2]);
             if (ServerManager.addAccount(tempA)) {
-                    dataOutputStream.writeUTF("signupsuccess");
-                    return;
-            }
-            else {
                 dataOutputStream.writeUTF("signupsuccess");
+                ServerMainGUI.addStateMsg(tokens[1] + " has singed success",1);
+                return;
+            } else {
+                dataOutputStream.writeUTF("signupfailed");
             }
             return;
         }
@@ -298,6 +369,7 @@ public class ServerHandle extends Thread {
     private boolean handleLogin(String[] tokens) {
         if (tokens.length == 3) {
             Account tempA = new Account(tokens[1], tokens[2]);
+            ServerMainGUI.addStateMsg(tokens[1] + " has logged in",1);
             if (ServerManager.checkAccount(tempA)) {
                 this.account = tempA;
                 return true;

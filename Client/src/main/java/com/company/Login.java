@@ -1,11 +1,10 @@
 package com.company;
 
+
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
+import java.awt.event.*;
 import java.io.IOException;
 
 public class Login extends JFrame {
@@ -13,25 +12,36 @@ public class Login extends JFrame {
     private JPasswordField passwordField = new JPasswordField();
     private JButton loginButton = new JButton("Login");
     private JButton signupButton = new JButton("Sign Up");
+    private JLabel userNameLabel = new JLabel("User name: ");
+    private JLabel passwordLabel = new JLabel("Password: ");
 
     private final ClientHandle client;
 
     public Login() throws IOException {
         super("Login");
-        setSize(300,200);
-        this.client = new ClientHandle("localhost",8888);
-
-
+        setSize(300, 200);
+        this.client = new ClientHandle("localhost", 8888);
+        setResizable(false);
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-
         JPanel jPanel = new JPanel();
-        jPanel.setLayout(new BoxLayout(jPanel,BoxLayout.Y_AXIS));
+        jPanel.setLayout(new GridLayout(6,0));
+        jPanel.add(userNameLabel);
         jPanel.add(userTextField);
+        jPanel.add(passwordLabel);
         jPanel.add(passwordField);
-        jPanel.add(loginButton);
-        jPanel.add(signupButton);
+        jPanel.add(new JLabel(""));
+
+        JPanel jPanelButton = new JPanel();
+        jPanelButton.setLayout(new GridLayout(0,2));
+        jPanelButton.add(loginButton);
+        jPanelButton.add(signupButton);
+
+        jPanel.add(jPanelButton);
+
+        jPanel.setBorder(new EmptyBorder(10,10,10,10));
+
         getContentPane().add(jPanel, BorderLayout.CENTER);
         setLocationRelativeTo(null);
         setVisible(true);
@@ -58,42 +68,82 @@ public class Login extends JFrame {
             }
         });
 
+        getRootPane().setDefaultButton(loginButton);
 
+        addWindowListener(new WindowListener() {
+            @Override
+            public void windowOpened(WindowEvent e) {
 
+            }
+
+            @Override
+            public void windowClosing(WindowEvent e) {
+                client.terminate();
+            }
+
+            @Override
+            public void windowClosed(WindowEvent e) {
+
+            }
+
+            @Override
+            public void windowIconified(WindowEvent e) {
+
+            }
+
+            @Override
+            public void windowDeiconified(WindowEvent e) {
+
+            }
+
+            @Override
+            public void windowActivated(WindowEvent e) {
+
+            }
+
+            @Override
+            public void windowDeactivated(WindowEvent e) {
+
+            }
+        });
+    }
+
+    @Override
+    public synchronized void addKeyListener(KeyListener l) {
+        super.addKeyListener(l);
     }
 
     private void sendSignupRequest() throws IOException {
-        Signup signup = new Signup(client,this);
+        Signup signup = new Signup(client, this);
         signup.setVisible(true);
 
         this.setVisible(false);
     }
 
     private void sendLoginRequest() throws IOException {
-        String user = userTextField.getText();
+        String user = userTextField.getText().toLowerCase();
         String pass = passwordField.getText();
 
-        if(client.login(user,pass))
-        {
+        if (client.login(user, pass)) {
             ClientMainGUI clientMainGUI = new ClientMainGUI(client);
             client.handleSocket();
 
-            JFrame jFrame = new JFrame("Chat application");
+            JFrame jFrame = new JFrame("You logged with name: " + user);
             jFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            jFrame.setSize(480,700);
+            jFrame.setSize(480, 500);
             jFrame.addWindowListener(clientMainGUI);
-            jFrame.getContentPane().add(clientMainGUI,BorderLayout.CENTER);
+            jFrame.getContentPane().add(clientMainGUI, BorderLayout.CENTER);
             jFrame.setLocationRelativeTo(null);
+            jFrame.setLocation(this.getLocation());
             jFrame.setVisible(true);
 
             setVisible(false);
-        }
-        else {
-            JOptionPane.showMessageDialog(this,"Please check your user name or password");
+        } else {
+            JOptionPane.showMessageDialog(this, "Please check your user name or password");
         }
     }
 
-    public static void main(String [] args) throws IOException {
+    public static void main(String[] args) throws IOException {
         Login login = new Login();
         login.setVisible(true);
     }

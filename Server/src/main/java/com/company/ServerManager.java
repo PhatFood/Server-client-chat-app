@@ -1,15 +1,18 @@
 package com.company;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 public class ServerManager extends Thread {
     private final int port;
     private static ArrayList<ServerHandle> clientHandles = new ArrayList<>();
     private static ArrayList<ServerHandle> fileTransferHandles = new ArrayList<>();
     private static ArrayList<Account> accounts = new ArrayList<>();
+    private static HashSet<String> topics = new HashSet<>();
 
     public ServerManager(int port) {
         this.port = port;
@@ -90,6 +93,14 @@ public class ServerManager extends Thread {
         return false;
     }
 
+    public static void addTopics(String topicName){
+        topics.add(topicName);
+    }
+
+    public static HashSet<String> getTopics() {
+        return topics;
+    }
+
     @Override
     public void run() {
         try {
@@ -98,12 +109,17 @@ public class ServerManager extends Thread {
                 System.out.println("Waiting for conection...");
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Accepted one connection from " + clientSocket);
+                ServerMainGUI.addStateMsg("Accepted one connection from " + clientSocket,0);
                 ServerHandle serverHandle = new ServerHandle(clientSocket);
                 serverHandle.start();
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public void Shutdown(){
+
     }
 
 

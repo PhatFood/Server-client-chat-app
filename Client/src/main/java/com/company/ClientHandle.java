@@ -16,6 +16,8 @@ public class ClientHandle {
     private DataInputStream dataInputStream;
     private DataOutputStream dataOutputStream;
 
+    private volatile boolean running = true;
+
     public ArrayList<ClientListener> getLis(){
         return clientListeners;
     }
@@ -79,6 +81,42 @@ public class ClientHandle {
         return true;
     }
 
+    public boolean joinTopic(String topicName){
+        String sentMessage = "";
+        sentMessage = "joinT " + topicName;
+        try {
+            dataOutputStream.writeUTF(sentMessage);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    public boolean createTopic(String topicName) {
+        String sentMessage = "";
+        sentMessage = "createT " + "*" + topicName;
+        try {
+            dataOutputStream.writeUTF(sentMessage);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
+    public boolean sendMessage(String userName, String msg, String topic) {
+        String sentMessage = "";
+        sentMessage = "message " + topic + "/" +userName + " " + msg;
+        try {
+            dataOutputStream.writeUTF(sentMessage);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+        return true;
+    }
+
     public boolean login(String userName, String passWord) {
 
         String sentMessage = sentMessage = "login " + userName + " " + passWord;
@@ -112,40 +150,20 @@ public class ClientHandle {
         return currentUser;
     }
 
-    public void handleSocket() throws IOException {
+    public void handleSocket()  {
         Thread t1;
-
-        t1 = new Thread(() -> receiveRequestFromServer());
+        t1 = new Thread(this::receiveRequestFromServer);
         t1.start();
     }
 
-    /*private void sendRequestToServer() {
-        try {
-            String sentMessage = "";
-            do {
-                DataInputStream din = new DataInputStream(System.in);
-                sentMessage = din.readLine();
-                bw.write(sentMessage);
-                bw.newLine();
-                bw.flush();
-                if (sentMessage.equalsIgnoreCase("logout")) {
-                    br.close();
-                    bw.close();
-                    socket.close();
-                    break;
-                }
-            }
-            while (true);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }*/
 
     private void receiveRequestFromServer() {
         try {
             String receivedMessage = null;
-            do {
+            while (running)
+            {
                 receivedMessage = dataInputStream.readUTF();
+                System.out.println(receivedMessage);
                 String[] tokens = StringUtils.split(receivedMessage);
                 if (tokens != null && tokens.length > 0) {
                     if (tokens[0].equals("disconnected")) {
@@ -165,9 +183,16 @@ public class ClientHandle {
                 } else {
                     break;
                 }
-            } while (true);
+            }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+        finally {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -222,10 +247,10 @@ public class ClientHandle {
     }
 
 
-    public void quit() {
+    public void terminate() {
         try {
+            running = false;
             dataOutputStream.writeUTF("logout");
-            socket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
