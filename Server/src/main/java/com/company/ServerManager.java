@@ -1,7 +1,6 @@
 package com.company;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -38,12 +37,9 @@ public class ServerManager extends Thread {
         return fileTransferHandles;
     }
 
-    public static ServerHandle getServerHandleReceiver(String sendingUser, String receivingUser)
-    {
-        for(ServerHandle serverHandle: fileTransferHandles)
-        {
-            if (serverHandle.getSendingName().equals(sendingUser) && serverHandle.getReceivingName().equals(receivingUser))
-            {
+    public static ServerHandle getServerHandleReceiver(String sendingUser, String receivingUser) {
+        for (ServerHandle serverHandle : fileTransferHandles) {
+            if (serverHandle.getSendingName().equals(sendingUser) && serverHandle.getReceivingName().equals(receivingUser)) {
                 return serverHandle;
             }
         }
@@ -51,18 +47,15 @@ public class ServerManager extends Thread {
     }
 
     public static Socket getSocketReceiver(String sendingUser, String receivingUser) throws IOException {
-        for(ServerHandle serverHandle: fileTransferHandles)
-        {
-            if (serverHandle.getSendingName().equals(sendingUser) && serverHandle.getReceivingName().equals(receivingUser))
-            {
+        for (ServerHandle serverHandle : fileTransferHandles) {
+            if (serverHandle.getSendingName().equals(sendingUser) && serverHandle.getReceivingName().equals(receivingUser)) {
                 return serverHandle.getSocket();
             }
         }
         return null;
     }
 
-    public static void removeFileTransferHandle(ServerHandle serverHandle)
-    {
+    public static void removeFileTransferHandle(ServerHandle serverHandle) {
         fileTransferHandles.remove(serverHandle);
     }
 
@@ -70,30 +63,28 @@ public class ServerManager extends Thread {
         fileTransferHandles.add(fileTransferHandle);
     }
 
-
     public static void removeClientHandle(ServerHandle serverHandle) {
         clientHandles.remove(serverHandle);
     }
 
-    public static void addClientHandle(ServerHandle serverHandle)
-    {
+    public static void addClientHandle(ServerHandle serverHandle) {
         clientHandles.add(serverHandle);
     }
 
     public static boolean addAccount(Account account) {
         for (Account a : accounts) {
             if (a.name.equals(account.name)) {
-                    return false;
+                return false;
             }
         }
-        if (AccountFileMng.AddAccount(account)){
+        if (AccountFileMng.AddAccount(account)) {
             accounts.add(account);
             return true;
         }
         return false;
     }
 
-    public static void addTopics(String topicName){
+    public static void addTopics(String topicName) {
         topics.add(topicName);
     }
 
@@ -109,7 +100,7 @@ public class ServerManager extends Thread {
                 System.out.println("Waiting for conection...");
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Accepted one connection from " + clientSocket);
-                ServerMainGUI.addStateMsg("Accepted one connection from " + clientSocket,0);
+                MainGUI.addStateMsg("Accepted one connection from " + clientSocket, 0);
                 ServerHandle serverHandle = new ServerHandle(clientSocket);
                 serverHandle.start();
             }
@@ -117,10 +108,4 @@ public class ServerManager extends Thread {
             e.printStackTrace();
         }
     }
-
-    public void Shutdown(){
-
-    }
-
-
 }

@@ -39,7 +39,7 @@
                     <appendAssemblyId>false</appendAssemblyId>
                     <archive>
                         <manifest>
-                            <mainClass>com.company.Login</mainClass>
+                            <mainClass>com.company.GUI.LoginMainGUI</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

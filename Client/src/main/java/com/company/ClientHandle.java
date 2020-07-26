@@ -22,7 +22,7 @@ public class ClientHandle {
         return clientListeners;
     }
 
-    ClientHandle(String host, int port) throws IOException {
+    public ClientHandle(String host, int port) throws IOException {
         final Socket socket = new Socket(host, port);
         this.socket = socket;
         currentUser = null;

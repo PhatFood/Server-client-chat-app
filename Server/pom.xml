@@ -37,7 +37,7 @@
                     <appendAssemblyId>false</appendAssemblyId>
                     <archive>
                         <manifest>
-                            <mainClass>com.company.ServerMainGUI</mainClass>
+                            <mainClass>com.company.MainGUI</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
