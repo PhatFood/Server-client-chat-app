@@ -14,13 +14,13 @@ public class Login extends JFrame {
     private JButton signupButton = new JButton("Sign Up");
     private JLabel userNameLabel = new JLabel("User name: ");
     private JLabel passwordLabel = new JLabel("Password: ");
+    private volatile boolean isConnected = false;
 
-    private final ClientHandle client;
+    private ClientHandle client;
 
     public Login() throws IOException {
         super("Login");
         setSize(300, 200);
-        this.client = new ClientHandle("localhost", 8888);
         setResizable(false);
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -46,13 +46,23 @@ public class Login extends JFrame {
         setLocationRelativeTo(null);
         setVisible(true);
 
+        Thread thread = new Thread(this::ConnectServer);
+        thread.start();
+
+
         loginButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                try {
-                    sendLoginRequest();
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
+                if(isConnected)
+                {
+                    try {
+                        sendLoginRequest();
+                    } catch (IOException ioException) {
+                        ioException.printStackTrace();
+                    }
+                }
+                else {
+                    showErrorConnect();
                 }
             }
         });
@@ -60,10 +70,15 @@ public class Login extends JFrame {
         signupButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                try {
-                    sendSignupRequest();
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
+                if(isConnected) {
+                    try {
+                        sendSignupRequest();
+                    } catch (IOException ioException) {
+                        ioException.printStackTrace();
+                    }
+                }
+                else {
+                    showErrorConnect();
                 }
             }
         });
@@ -106,6 +121,24 @@ public class Login extends JFrame {
 
             }
         });
+    }
+
+    private void showErrorConnect() {
+        JOptionPane.showMessageDialog(this, "Cannot connect to server!");
+    }
+
+    private void ConnectServer(){
+        while(!isConnected) {
+            try {
+                this.client = new ClientHandle("localhost", 8888);
+                isConnected = true;
+            } catch (IOException e) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException interruptedException) {
+                }
+            }
+        }
     }
 
     @Override
