@@ -25,6 +25,7 @@ public class MainGUI extends JPanel implements ClientListener, WindowListener {
     private JButton createTopicBtn = new JButton("Create new topic");
 
     public MainGUI(ClientHandle client) {
+        //Test git
         this.client = client;
         this.client.addClientListener(this);
         clientListModel = new DefaultListModel<>();
